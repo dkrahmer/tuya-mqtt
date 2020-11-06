@@ -4,5 +4,30 @@
     "topic": "tuya/",
     "mqtt_user": "",
     "mqtt_pass": "",
-    "qos": 2
+    "qos": 2,
+    "defaultDeviceType": "SimpleSwitch",
+    "defaultDeviceProperties": {
+        "SimpleSwitch": {
+            "template": {
+                "state": {
+                    "key": 1,
+                    "type": "bool"
+                }
+            }
+        },
+        "SimpleDimmer": {
+            "state": {
+                "key": 1,
+                "type": "bool"
+            },
+            "brightness_state": {
+                "key": 2,
+                "type": "int",
+                "topicMin": 1,
+                "topicMax": 100,
+                "stateMath": "/2.55",
+                "commandMath": "*2.55"
+            }
+        }
+    }
 }

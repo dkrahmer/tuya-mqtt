@@ -10,5 +10,11 @@
         id: "22220123456789abcdef",
         key: "2abcdef012345678",
         mdl: "Fan Switch"
+    },
+    {
+        name: "Disabled Plug",
+        id: "33330123456789abcdef",
+        key: "3abcdef012345678",
+        enabled: false
     }
 ]
