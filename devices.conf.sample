@@ -6,7 +6,15 @@
         mdl: "Light Switch"
     },
     {
-        name: "Bedroom Ceiling Fan",
+        name: "Bedroom Smart Controller",
+        id: "22220123456789abcdef",
+        key: "2abcdef012345678",
+        type: "SimpleSwitch",
+        dpsPower: [ 1, 2 ],
+        subNames: [ "Bedroom Light", "Bedroom Ceiling Fan" ]
+    },
+    {
+        name: "Living Room Ceiling Fan",
         id: "22220123456789abcdef",
         key: "2abcdef012345678",
         mdl: "Fan Switch"

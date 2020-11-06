@@ -46,11 +46,7 @@ class TuyaDevice {
         this.heartbeatsMissed = 0
 
         // Build the MQTT topic for this device (friendly name or device id)
-        if (this.options.name) {
-            this.baseTopic = this.topic + this.options.name + '/'
-        } else {
-            this.baseTopic = this.topic + this.options.id + '/'
-        }
+        this.baseTopic = this.topic + (this.options.name || this.options.id) + '/'
 
         // Create the new Tuya Device
         this.device = new TuyAPI(JSON.parse(JSON.stringify(this.options)))
@@ -61,7 +57,7 @@ class TuyaDevice {
                 debug('Received JSON data from device '+this.options.id+' ->', JSON.stringify(data.dps))
                 this.updateState(data)
             } else {
-                if (data !== 'json obj data unvalid') {
+                if (data !== 'json obj data invalid') {
                     debug('Received string data from device '+this.options.id+' ->', data.replace(/[^a-zA-Z0-9 ]/g, ''))
                 }
             }
@@ -79,8 +75,10 @@ class TuyaDevice {
             if (this.device.isConnected()) {
                 debug('Connected to device ' + this.toString())
                 this.heartbeatsMissed = 0
+                await this.init()
+                await utils.sleep(1)
+                // Publish the online status after init is complete to give HA a chance to listen for it
                 this.publishMqtt(this.baseTopic+'status', 'online')
-                this.init()
             }
         })
 
@@ -111,45 +109,53 @@ class TuyaDevice {
         // Suppress topic updates while syncing device state with cached state
         this.connected = false
         for (let topic in this.deviceTopics) {
-            const key = this.deviceTopics[topic].key
-            try {
-                const result = await this.device.get({"dps": key})
-                this.dps[key].val = result
-                this.dps[key].updated = true
-            } catch {
-                debugError('Could not get value for device DPS key '+key)
+            let topicArray = this.deviceTopics[topic]
+            if (!Array.isArray(topicArray))
+                topicArray = [ topicArray ]
+            
+            for (const deviceTopic of topicArray) {
+                const key = deviceTopic.key
+                try {
+                    const result = await this.device.get({"dps": key})
+                    this.dps[key].val = result
+                    this.dps[key].updated = true
+                } catch {
+                    debugError('Could not get value for device DPS key '+key)
+                }
             }
         }
+
         this.connected = true
-        // Force topic update now that all states are fully syncronized
+        // Force topic update now that all states are fully synchronized
         this.publishTopics()
     }
 
     // Update cached DPS values on data updates
     updateState(data) {
-        if (typeof data.dps != 'undefined') {
-            // Update cached device state data
-            for (let key in data.dps) {
-                // Only update if the received value is different from previous value
-                if (this.dps[key] !== data.dps[key]) {
-                    this.dps[key] = {
-                        'val': data.dps[key],
-                        'updated': true
-                    }
-                }
-                if (this.isRgbtwLight) {
-                    if (this.config.hasOwnProperty('dpsColor') && this.config.dpsColor == key) {
-                        this.updateColorState(data.dps[key])
-                    } else if (this.config.hasOwnProperty('dpsMode') && this.config.dpsMode == key) {
-                        // If color/white mode is changing, force sending color state
-                        // Allows overriding saturation value to 0% for white mode for the HSB device topics
-                        this.dps[this.config.dpsColor].updated = true
-                    }
+        if (typeof data.dps == 'undefined') 
+            return;
+
+        // Update cached device state data
+        for (let key in data.dps) {
+            // Only update if the received value is different from previous value
+            if (this.dps[key] !== data.dps[key]) {
+                this.dps[key] = {
+                    'val': data.dps[key],
+                    'updated': true
                 }
             }
-            if (this.connected) {
-                this.publishTopics()
+            if (this.isRgbtwLight) {
+                if (this.config.hasOwnProperty('dpsColor') && this.config.dpsColor == key) {
+                    this.updateColorState(data.dps[key])
+                } else if (this.config.hasOwnProperty('dpsMode') && this.config.dpsMode == key) {
+                    // If color/white mode is changing, force sending color state
+                    // Allows overriding saturation value to 0% for white mode for the HSB device topics
+                    this.dps[this.config.dpsColor].updated = true
+                }
             }
+        }
+        if (this.connected) {
+            this.publishTopics()
         }
     }
 
@@ -160,13 +166,18 @@ class TuyaDevice {
 
         // Loop through and publish all device specific topics
         for (let topic in this.deviceTopics) {
-            const deviceTopic = this.deviceTopics[topic]
-            const key = deviceTopic.key
-            // Only publish values if different from previous value
-            if (this.dps[key] && this.dps[key].updated) {
-                const state = this.getTopicState(deviceTopic, this.dps[key].val)
-                if (state) { 
-                    this.publishMqtt(this.baseTopic + topic, state, true)
+            let topicArray = this.deviceTopics[topic]
+            if (!Array.isArray(topicArray))
+                topicArray = [ topicArray ]
+            
+                for (const deviceTopic of topicArray) {
+                    const key = deviceTopic.key
+                // Only publish values if different from previous value
+                if (this.dps[key] && this.dps[key].updated) {
+                    const state = this.getTopicState(deviceTopic, this.dps[key].val)
+                    if (state) { 
+                        this.publishMqtt(`${this.baseTopic}${topicArray.length == 1 ? '' : ('dps/' + key + '/')}${topic}`, state, true)
+                    }
                 }
             }
         }
@@ -246,7 +257,7 @@ class TuyaDevice {
             return ''
         }
 
-        // Perform any required math transforms before returing command value
+        // Perform any required math transforms before returning command value
         switch (deviceTopic.type) {
             case 'int':
                 value = (deviceTopic.stateMath) ? parseInt(Math.round(evaluate(value+deviceTopic.stateMath))) : value = parseInt(value)
@@ -279,13 +290,14 @@ class TuyaDevice {
             // Call device specific command topic handler
             this.processDeviceCommand(command, commandTopic) 
         }
-    }   
+    }
 
     // Process MQTT commands for all device command topics
     processDeviceCommand(command, commandTopic) {
         // Determine state topic from command topic to find proper template
-        const stateTopic = commandTopic.replace('command', 'state')
-        const deviceTopic = this.deviceTopics.hasOwnProperty(stateTopic) ? this.deviceTopics[stateTopic] : ''
+        let deviceTopic = this.deviceTopics['state']
+        if (deviceTopic && Array.isArray(deviceTopic))
+            deviceTopic = deviceTopic[0]
 
         if (deviceTopic) {
             debugCommand('Device '+this.options.id+' received command topic: '+commandTopic+', message: '+command)
@@ -305,7 +317,8 @@ class TuyaDevice {
             const command = JSON.parse(message)
             debugCommand('Parsed Tuya JSON command: '+JSON.stringify(command))
             this.set(command)
-        } else {
+        }
+        else {
             debugCommand('DPS command topic requires Tuya style JSON value')
         }
     }
@@ -317,11 +330,21 @@ class TuyaDevice {
         } else {
             const dpsMessage = this.parseDpsMessage(message)
             debugCommand('Received command for DPS'+dpsKey+': ', message)
-            const command = {
-                dps: dpsKey,
-                set: dpsMessage
+            let deviceTopic = this.deviceTopics['state']
+
+            if (Array.isArray(deviceTopic))
+                deviceTopic = deviceTopic.find(topic => topic.key == dpsKey)
+
+            if (deviceTopic) {
+                let commandResult = this.sendTuyaCommand(message, deviceTopic)
+                if (!commandResult) {
+                    debugCommand('Command topic '+this.baseTopic+commandTopic+' received invalid value: '+command)
+                }
             }
-            this.set(command)
+            else {
+                debugCommand(`Invalid state DPS key '${dpsKey}' for device id: ${this.config.id}`)
+                return
+            }
         }
     }
 
@@ -386,6 +409,7 @@ class TuyaDevice {
 
     // Convert simple bool commands to true/false
     parseBoolCommand(command) {
+        command = command.toLowerCase()
         switch(command) {
             case 'on':
             case 'off':
@@ -401,7 +425,7 @@ class TuyaDevice {
         }
     }
 
-    // Validate/transform set interger values 
+    // Validate/transform set integer values 
     parseNumberCommand(command, deviceTopic) {
         let value = undefined
         const invalid = '!!!INVALID!!!'
@@ -419,7 +443,7 @@ class TuyaDevice {
             command = deviceTopic.topicMax
         }
 
-        // Perform any required math transforms before returing command value
+        // Perform any required math transforms before returning command value
         switch (deviceTopic.type) {
             case 'int':
                 if (deviceTopic.commandMath) {
@@ -533,7 +557,7 @@ class TuyaDevice {
             // Split device topic HSB components into array
             const components = topic.components.split(',')
 
-            // If device topic inlucdes saturation check for changes
+            // If device topic includes saturation check for changes
             if (components.includes('s')) {
                 if (this.cmdColor.s < 10) {
                     // Saturation changed to < 10% = white mode
