@@ -136,7 +136,7 @@ openHAB examples are [here](docs/openHAB.md).
 - [Tycale](https://github.com/Tycale)
 - [crashdummymch](https://github.com/crashdummymch)
 - [GadgetAngel](https://github.com/GadgetAngel)
-
+- [dkrahmer](https://github.com/dkrahmer)
 
 ## Related Projects:
 - https://github.com/codetheweb/tuyapi
