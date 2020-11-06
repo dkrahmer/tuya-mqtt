@@ -28,7 +28,7 @@ class RGBTWLight extends TuyaDevice {
         this.config.dpsColor = this.config.dpsColor ? this.config.dpsColor : this.guess.dpsColor
         this.config.colorType = this.config.colorType ? this.config.colorType : this.guess.colorType
 
-        this.deviceData.mdl = 'RGBTW Light'
+        this.deviceData.mdl = this.config.mdl || 'RGBTW Light'
         this.isRgbtwLight = true
 
         // Set white value transform math

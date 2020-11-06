@@ -25,34 +25,48 @@ async function processExit(exitCode) {
     for (let tuyaDevice of tuyaDevices) {
         tuyaDevice.device.disconnect()
     }
-    if (exitCode || exitCode === 0) debug('Exit code: '+exitCode)
+    if (exitCode || exitCode === 0)
+        debug('Exit code: '+exitCode)
     await utils.sleep(1)
     process.exit()
 }
 
-// Get new deivce based on configured type
+// Get new device based on configured type
 function getDevice(configDevice, mqttClient) {
     const deviceInfo = {
         configDevice: configDevice,
         mqttClient: mqttClient,
         topic: CONFIG.topic
     }
+
+    if (!configDevice.type && CONFIG.defaultDeviceType) {
+        configDevice.type = CONFIG.defaultDeviceType;
+    }
+
+    if (configDevice.type && CONFIG.defaultDeviceProperties) {
+        const defaultDeviceProperties = CONFIG.defaultDeviceProperties[configDevice.type];
+        if (defaultDeviceProperties) {
+            // Fill in any missing properties with defaults for this device type
+            configDevice = { ...defaultDeviceProperties, ...configDevice }
+        }
+    }
+   
     switch (configDevice.type) {
         case 'SimpleSwitch':
             return new SimpleSwitch(deviceInfo)
-            break;
         case 'SimpleDimmer':
             return new SimpleDimmer(deviceInfo)
-            break;
         case 'RGBTWLight':
             return new RGBTWLight(deviceInfo)
-            break;
+        default:
+            return new GenericDevice(deviceInfo)
     }
-    return new GenericDevice(deviceInfo)
 }
 
 function initDevices(configDevices, mqttClient) {
     for (let configDevice of configDevices) {
+        if (configDevice.enabled === false)
+            continue;
         const newDevice = getDevice(configDevice, mqttClient)
         tuyaDevices.push(newDevice)
     }
@@ -141,7 +155,7 @@ const main = async() => {
             const commandTopic = splitTopic[topicLength - 1]
             const deviceTopicLevel = splitTopic[1]
 
-            if (topic === 'homeassistant/status' || topic === 'hass/status' ) {
+            if (topic === 'homeassistant/status' || topic === 'hass/status') {
                 debug('Home Assistant state topic '+topic+' received message: '+message)
                 if (message === 'online') {
                     republishDevices()

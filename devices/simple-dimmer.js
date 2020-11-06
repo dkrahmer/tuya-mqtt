@@ -6,11 +6,13 @@ const utils = require('../lib/utils')
 class SimpleDimmer extends TuyaDevice {
     async init() {
         // Set device specific variables
-        this.config.dpsPower = this.config.dpsPower ? this.config.dpsPower : 1
-        this.config.dpsBrightness = this.config.dpsBrightness ? this.config.dpsBrightness : 2
-        this.config.brightnessScale = this.config.brightnessScale ? this.config.brightnessScale : 255
+        if (typeof this.config.dpsPower === 'undefined')
+            this.config.dpsPower = 1
+        if (typeof this.config.dpsBrightness === 'undefined')
+            this.config.dpsBrightness = 1
+        this.config.brightnessScale = this.config.brightnessScale || 255
 
-        this.deviceData.mdl = 'Dimmer Switch'
+        this.deviceData.mdl = this.config.mdl || 'Dimmer Switch'
 
         // Set white value transform math
         let brightnessStateMath
