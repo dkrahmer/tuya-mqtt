@@ -1,0 +1,14 @@
+[
+    {
+        name: "Kitchen Table",
+        id: "11110123456789abcdef",
+        key: "1abcdef012345678",
+        mdl: "Light Switch"
+    },
+    {
+        name: "Bedroom Ceiling Fan",
+        id: "22220123456789abcdef",
+        key: "2abcdef012345678",
+        mdl: "Fan Switch"
+    }
+]

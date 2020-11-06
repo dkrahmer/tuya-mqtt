@@ -6,9 +6,13 @@ const utils = require('../lib/utils')
 class SimpleSwitch extends TuyaDevice {
     async init() {
         // Set device specific variables
-        this.config.dpsPower = this.config.dpsPower ? this.config.dpsPower : 1
+        if (typeof this.config.dpsPower === 'undefined')
+            this.config.dpsPower = 1
 
-        this.deviceData.mdl = 'Switch/Socket'
+        if (!Array.isArray(this.config.dpsPower))
+            this.config.dpsPower = [ this.config.dpsPower ]
+
+        this.deviceData.mdl = this.config.mdl || 'Switch/Socket'
 
         // Map generic DPS topics to device specific topic names
         this.deviceTopics = {
